@@ -1,0 +1,32 @@
+k_alpha: 0.99
+k_gains:
+  - 240.0
+  - 240.0
+  - 240.0
+  - 240.0
+  - 100.0
+  - 60.0
+  - 20.0
+
+d_gains:
+  - 20.0
+  - 20.0
+  - 20.0
+  - 10.0
+  - 10.0
+  - 10.0
+  - 5.0
+
+activate_controller: true
+sync_after_activation: true
+
+controller_names:
+  - joint_follower_controller
+
+target_topic_name: "gello/joint_states"
+
+namespace: "enter_your_namespace_here"
+robot_ip: "enter_your_robot_ip_here"
+mock_hardware: true # Set to false when running on real hardware, true for testing without a robot.
+
+

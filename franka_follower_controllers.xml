@@ -1,0 +1,8 @@
+<library path="franka_follower_controllers">
+    <class name="franka_follower_controllers/JointFollowerController"
+           type="franka_follower_controllers::JointFollowerController" base_class_type="controller_interface::ControllerInterface">
+        <description>
+            The JointFollowerController runs a Joint Impedance Controller that receives its target joint position from a configurable topic.
+        </description>
+    </class>
+</library>
