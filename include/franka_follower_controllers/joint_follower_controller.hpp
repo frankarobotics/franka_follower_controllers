@@ -19,6 +19,7 @@
 #include <controller_interface/controller_interface.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
+#include <std_msgs/msg/string.hpp>
 #include <string>
 
 using CallbackReturn =
@@ -45,6 +46,8 @@ public:
   on_configure(const rclcpp_lifecycle::State & previous_state) override;
   CallbackReturn
   on_activate(const rclcpp_lifecycle::State & previous_state) override;
+  CallbackReturn
+  on_deactivate(const rclcpp_lifecycle::State & previous_state) override;
 
 private:
   std::string arm_id_;
@@ -65,6 +68,8 @@ private:
   std::unique_ptr<MotionGenerator> motion_generator_;
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr
     target_joint_state_subscriber_ = nullptr;
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr state_publisher_;
+  std::string current_state_{"INACTIVE"}; // "INACTIVE", "SYNCING", "FOLLOWING"
   bool target_joint_state_valid_ = false;
   std::array<double, 7> target_joint_state_{0, 0, 0, 0, 0, 0, 0};
   rclcpp::Time last_target_joint_state_time_;
@@ -77,6 +82,7 @@ private:
   void updateJointStates_();
   void validateTargetJointState_(const sensor_msgs::msg::JointState & msg);
   void jointStateCallback_(const sensor_msgs::msg::JointState msg);
+  void publishSyncState_(const std::string & state);
 };
 
 } // namespace franka_follower_controllers

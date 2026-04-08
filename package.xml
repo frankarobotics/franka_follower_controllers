@@ -18,6 +18,7 @@
   <depend>franka_semantic_components</depend>
   <depend>franka_msgs</depend>
   <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
   <depend>pluginlib</depend>
   <depend>rclcpp</depend>
   <depend>rclcpp_lifecycle</depend>

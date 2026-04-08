@@ -87,6 +87,7 @@ controller_interface::return_type JointFollowerController::update(
   if (move_to_start_position_finished_ || !sync_after_activation_) {
     // After reaching the start position, we follow the joint position from the target topic
     // This is the normal operation mode of the controller
+    publishSyncState_("FOLLOWING");
     if (!target_joint_state_valid_) {
       RCLCPP_FATAL(get_node()->get_logger(), "Timeout: No valid target joint states received!");
       rclcpp::shutdown();  // Exit the node permanently
@@ -203,6 +204,14 @@ CallbackReturn JointFollowerController::on_configure(
           target_joint_states_topic_name_, 1,
     [this](const sensor_msgs::msg::JointState & msg) {jointStateCallback_(msg);});
 
+  auto qos = rclcpp::QoS(rclcpp::KeepLast(1)).transient_local();
+  state_publisher_ = get_node()->create_publisher<std_msgs::msg::String>("~/state", qos);
+
+  // Publish initial state without using the publishSyncState_ function due to its dedup check
+  auto msg = std_msgs::msg::String();
+  msg.data = current_state_;
+  state_publisher_->publish(msg);
+
   return CallbackReturn::SUCCESS;
 }
 
@@ -211,7 +220,18 @@ CallbackReturn JointFollowerController::on_activate(
 {
   last_target_joint_state_time_ = get_node()->now();
   dq_filtered_.setZero();
-  start_time_ = this->get_node()->now();
+  move_to_start_position_finished_ = false;
+  motion_generator_initialized_ = false;
+
+  publishSyncState_(sync_after_activation_ ? "SYNCING" : "FOLLOWING");
+
+  return CallbackReturn::SUCCESS;
+}
+
+CallbackReturn JointFollowerController::on_deactivate(
+  const rclcpp_lifecycle::State & /*previous_state*/)
+{
+  publishSyncState_("INACTIVE");
 
   return CallbackReturn::SUCCESS;
 }
@@ -292,7 +312,20 @@ bool JointFollowerController::initializeMotionGenerator_()
 
   const double motion_generator_speed_factor = 0.2;
   motion_generator_ = std::make_unique<MotionGenerator>(motion_generator_speed_factor, q_, q_goal);
+  start_time_ = this->get_node()->now();
   return true;
+}
+
+void JointFollowerController::publishSyncState_(const std::string & state)
+{
+  if (state == current_state_) {
+    return;
+  }
+  current_state_ = state;
+  auto msg = std_msgs::msg::String();
+  msg.data = state;
+  state_publisher_->publish(msg);
+  RCLCPP_INFO(get_node()->get_logger(), "Sync state: %s", state.c_str());
 }
 
 }  // namespace franka_follower_controllers

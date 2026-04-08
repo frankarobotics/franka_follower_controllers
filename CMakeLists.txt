@@ -14,6 +14,7 @@ set(THIS_PACKAGE_INCLUDE_DEPENDS
   controller_interface
   franka_msgs
   sensor_msgs
+  std_msgs
   controller_manager_msgs
   Eigen3
   pluginlib
