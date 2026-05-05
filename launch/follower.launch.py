@@ -135,16 +135,24 @@ def create_ros2_control_parameter_file(config) -> str:
     d_gains: list[float] = cvt_to_float_list(config[D_GAINS_KEY])
     reset_position: list[float] = cvt_to_float_list(config[RESET_POSITION_KEY])
 
+    arm_id = config.get(ARM_ID_KEY, 'fr3') or 'fr3'
+    arm_prefix = config.get(NAMESPACE_KEY, '') + '_' if config.get(NAMESPACE_KEY, '') else ''
+
     config_data = {
         '/**': {
             'joint_follower_controller': {
                 'ros__parameters': {
-                    'arm_id': 'fr3',
+                    'arm_id': arm_id,
                     'target_joint_states_topic_name': config[TARGET_TOPIC_NAME_KEY],
                     'k_gains': k_gains,
                     'd_gains': d_gains,
                     'k_alpha': config[K_ALPHA_KEY],
                     'sync_after_activation': config[SYNC_AFTER_ACTIVATION_KEY],
+                }
+            },
+            'gravity_compensation_controller': {
+                'ros__parameters': {
+                    'arm_id': arm_prefix + arm_id,
                 }
             },
             'move_to_position_controller': {
