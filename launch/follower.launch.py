@@ -312,30 +312,48 @@ def add_ros2_control_launch_config(
 
 def add_controller(context) -> list[LaunchDescriptionEntity]:
     """Create the launch configuration for a follower controller."""
-    controller_config = default_parameters | load_yaml(
-        LaunchConfiguration('config_file').perform(context)
-    )
-
-    controller_names = controller_config.get(CONTROLLER_NAMES_KEY)
-
+    raw_config = load_yaml(LaunchConfiguration('config_file').perform(context))
     known_controller_names = get_known_controller_names(context)
-
     print(f'Known Controllers: {known_controller_names}')
 
-    if not controller_names:
-        raise ValueError(
-            'Each controller configuration needs to specify a list of controller names!'
-        )
+    # Detect multi-robot format: top-level keys whose values are dicts containing robot_ip.
+    # e.g. config_franka_robot.yml with LEFT: {...} and RIGHT: {...} sections.
+    robot_sections = [
+        v for v in raw_config.values()
+        if isinstance(v, dict) and ROBOT_IP_KEY in v
+    ]
 
-    if not set(controller_names).issubset(known_controller_names):
-        raise ValueError(
-            
+    if robot_sections:
+        # Multi-robot config: launch each section independently
+        launch_entities = []
+        for section_config in robot_sections:
+            controller_config = default_parameters | section_config
+            controller_names = controller_config.get(CONTROLLER_NAMES_KEY)
+            if not controller_names:
+                raise ValueError(
+                    'Each controller configuration needs to specify a list of controller names!'
+                )
+            if not set(controller_names).issubset(known_controller_names):
+                raise ValueError(
+                    f"Unknown controllers in configuration file (property '{CONTROLLER_NAMES_KEY}')!"
+                    f' Known controllers are: {known_controller_names}'
+                )
+            launch_entities.extend(add_ros2_control_launch_config(controller_config))
+        return launch_entities
+    else:
+        # Single-robot flat config (backwards compatible)
+        controller_config = default_parameters | raw_config
+        controller_names = controller_config.get(CONTROLLER_NAMES_KEY)
+        if not controller_names:
+            raise ValueError(
+                'Each controller configuration needs to specify a list of controller names!'
+            )
+        if not set(controller_names).issubset(known_controller_names):
+            raise ValueError(
                 f"Unknown controllers in configuration file (property '{CONTROLLER_NAMES_KEY}')!"
                 f' Known controllers are: {known_controller_names}'
-            
-        )
-
-    return add_ros2_control_launch_config(controller_config)
+            )
+        return add_ros2_control_launch_config(controller_config)
 
 
 def generate_launch_description():
