@@ -8,14 +8,23 @@ The follower controller will listen to a specified topic and match the published
 Currently, the following controllers are available:
     - `joint_follower_controller`: Follows absolute joint positions
 
-# Launch a Controller
+## State Topic
 
-You can launch a single controller with: 
+Each controller publishes its current state on `~/state` (`std_msgs/String`, transient local QoS):
+
+- **INACTIVE**: Controller is not active (published on configure and deactivate)
+- **SYNCING**: Controller is active and moving to the start position (only when `sync_after_activation: true`)
+- **FOLLOWING**: Controller is active and following the target joint states
+
+## Launch a Controller
+
+You can launch a single controller with:
+
 ```bash
 ros2 launch franka_follower_controllers follower.launch.py config_file:=/path/to/your/config_file.yaml
 ```
 
-# Config file
+## Config file
 
 This is an example of a configuration file:
 
