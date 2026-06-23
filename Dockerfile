@@ -5,9 +5,7 @@ FROM ghcr.io/sloretz/ros:${ROS_DISTRIBUTION}-desktop-full-2026-02-01 AS devconta
 RUN mkdir -p /ros2_ws/src
 
 ARG ROS_DISTRIBUTION
-ARG FRANKA_ROS2_VERSION="v3.1.1"
-ARG FRANKA_DESCRIPTION_VERSION="2.1.0"
-ARG LIBFRANKA_VERSION="0.18.0"
+ARG FRANKA_ROS2_VERSION="v3.4.0"
 
 # Add non-root user
 ARG USERNAME=franka
@@ -20,12 +18,10 @@ RUN groupadd --gid $USER_GID $USERNAME \
 
 WORKDIR "/home/${USERNAME}/ros2_ws/src"
 RUN /bin/bash -c '\
-    git clone --recursive https://github.com/frankarobotics/franka_ros2.git && \
-    git clone --recursive https://github.com/frankarobotics/franka_description.git &&\
-    git clone --recursive https://github.com/frankarobotics/libfranka.git && \
-    (cd libfranka && git checkout ${LIBFRANKA_VERSION} && git submodule update) && \
-    (cd franka_description && git checkout ${FRANKA_DESCRIPTION_VERSION} && git submodule update) && \
+    git clone https://github.com/frankarobotics/franka_ros2.git --branch ${FRANKA_ROS2_VERSION} && \
     (cd franka_ros2 && git checkout ${FRANKA_ROS2_VERSION} && git submodule update) && \
+    vcs import < franka_ros2/dependency.repos && \
+    find . -name ".git" -type d -execdir git submodule update --init --recursive \; && \
     chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/'
 
 WORKDIR "/home/${USERNAME}/ros2_ws"
@@ -46,7 +42,7 @@ FROM devcontainer AS application
 
 COPY . src/franka_follower_controllers/
 
-RUN source /opt/ros/${ROS_DISTRIBUTION}/setup.bash && colcon build --packages-up-to franka_follower_controllers --cmake-args -DCMAKE_BUILD_TYPE=Release
+RUN source /opt/ros/${ROS_DISTRIBUTION}/setup.bash && colcon build --packages-up-to franka_follower_controllers --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF
 
 STOPSIGNAL SIGINT
 

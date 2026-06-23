@@ -61,10 +61,9 @@ MAX_FORCE_ACCELERATION_KEY = 'upper_force_thresholds_acceleration'
 MAX_FORCE_NOMINAL_KEY = 'upper_force_thresholds_nominal'
 LOAD_GRIPPER_KEY = 'load_gripper'
 MOCK_HARDWARE_KEY = 'mock_hardware'
-URDF_KEY = 'urdf_file'
 NAMESPACE_KEY = 'namespace'
 ROBOT_IP_KEY = 'robot_ip'
-ARM_ID_KEY = 'arm_id'
+ROBOT_TYPE_KEY = 'robot_type'
 RESET_POSITION_KEY = 'reset_position'
 SYNC_AFTER_ACTIVATION_KEY = 'sync_after_activation'
 ACTIVATE_CONTROLLER_KEY = 'activate_controller'
@@ -80,8 +79,7 @@ default_parameters = {
     RESET_POSITION_KEY: [0.0, -0.25 * pi, 0.0, -0.75 * pi, 0.0, 0.5 * pi, 0.25 * pi],
     LOAD_GRIPPER_KEY: False,
     MOCK_HARDWARE_KEY: False,
-    URDF_KEY: 'fr3/fr3.urdf.xacro',
-    ARM_ID_KEY: '',
+    ROBOT_TYPE_KEY: 'fr3',
     ROBOT_IP_KEY: 'you_need_to_configure_the_robot_ip',
     SYNC_AFTER_ACTIVATION_KEY: True,
     ACTIVATE_CONTROLLER_KEY: False,
@@ -135,14 +133,13 @@ def create_ros2_control_parameter_file(config) -> str:
     d_gains: list[float] = cvt_to_float_list(config[D_GAINS_KEY])
     reset_position: list[float] = cvt_to_float_list(config[RESET_POSITION_KEY])
 
-    arm_id = config.get(ARM_ID_KEY, 'fr3') or 'fr3'
-    arm_prefix = config.get(NAMESPACE_KEY, '') + '_' if config.get(NAMESPACE_KEY, '') else ''
+    robot_type = config.get(ROBOT_TYPE_KEY, 'fr3') or 'fr3'
 
     config_data = {
         '/**': {
             'joint_follower_controller': {
                 'ros__parameters': {
-                    'arm_id': arm_id,
+                    'robot_type': robot_type,
                     'target_joint_states_topic_name': config[TARGET_TOPIC_NAME_KEY],
                     'k_gains': k_gains,
                     'd_gains': d_gains,
@@ -152,7 +149,7 @@ def create_ros2_control_parameter_file(config) -> str:
             },
             'gravity_compensation_controller': {
                 'ros__parameters': {
-                    'arm_id': arm_prefix + arm_id,
+                    'robot_type': robot_type,
                 }
             },
             'move_to_position_controller': {
@@ -222,15 +219,13 @@ def add_ros2_control_launch_config(
                 )
             ),
             launch_arguments={
-                'arm_id': ros2_control_config[ARM_ID_KEY],
-                'arm_prefix': namespace,  # Using namespace as arm_prefix
+                'robot_type': ros2_control_config[ROBOT_TYPE_KEY],
+                'arm_prefix': namespace,
                 'namespace': namespace,
-                'urdf_file': ros2_control_config[URDF_KEY],
                 'robot_ip': ros2_control_config[ROBOT_IP_KEY],
                 'load_gripper': str(ros2_control_config[LOAD_GRIPPER_KEY]),
                 'use_fake_hardware': str(ros2_control_config[MOCK_HARDWARE_KEY]),
-                'mock_sensor_commands': str(ros2_control_config[MOCK_HARDWARE_KEY]),
-                'joint_sources': ','.join(['joint_states', 'franka_gripper/joint_states']),
+                'fake_sensor_commands': str(ros2_control_config[MOCK_HARDWARE_KEY]),
                 'joint_state_rate': str(30),
                 'controllers_yaml': PathJoinSubstitution(
                     [
