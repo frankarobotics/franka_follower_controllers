@@ -19,7 +19,7 @@
 			],
 			"settings": {
 				"python.analysis.extraPaths": [
-					"/opt/ros/humble/lib/python3.10/site-packages"
+					"/opt/ros/jazzy/lib/python3.12/site-packages"
 				],
 				"terminal.integrated.defaultProfile.linux": "bash",
 				"terminal.integrated.profiles.linux": {

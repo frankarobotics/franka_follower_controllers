@@ -21,6 +21,9 @@
       joint_follower_controller:
         type: franka_follower_controllers/JointFollowerController
 
+      pid_joint_follower_controller:
+        type: franka_follower_controllers/PIDJointFollowerController
+
       franka_robot_state_broadcaster:
         type: franka_robot_state_broadcaster/FrankaRobotStateBroadcaster
         state_interfaces:
@@ -35,9 +38,45 @@
       gravity_compensation_controller:
         type: franka_example_controllers/GravityCompensationExampleController
 
+  pid_joint_follower_controller:
+    ros__parameters:
+      p_gains:
+        - 240.0
+        - 240.0
+        - 240.0
+        - 240.0
+        - 100.0
+        - 60.0
+        - 20.0
+      d_gains:
+        - 20.0
+        - 20.0
+        - 20.0
+        - 10.0
+        - 10.0
+        - 10.0
+        - 5.0
+      i_gains:
+        - 0.0
+        - 0.0
+        - 0.0
+        - 0.0
+        - 0.0
+        - 0.0
+        - 0.0
+      velocity_filter_alpha: 0.9  # Filters the velocity measured by the robot.
+      velocity_limits_scaling: 0.9  # Scales the velocity limits by factor. Used to prevent joint velocity limits errors.
+      acceleration_limits: [9.5, 9.5, 9.5, 9.5, 9.5, 9.5, 9.5]  # Acceleration limits for each joint (rad/s^2)
+      torque_derivative_limits: [900.0, 900.0, 900.0, 900.0, 900.0, 900.0, 900.0]
+      # HW torque limits: [87.0, 87.0, 87.0, 87.0, 12.0, 12.0, 12.0]
+      torque_limits: [85.0, 85.0, 85.0, 85.0, 11.5, 11.5, 11.5]  # FR3 max torques per joint
+
+      sync_complete_threshold: 0.01  # radians, threshold for considering the robot to be in sync with the target position
+      sync_velocity_scaling: 0.2  # factor to scale velocity limits when not yet in sync
+
   joint_follower_controller:
     ros__parameters:
-      arm_id: "fr3"
+      robot_type: "fr3"
       k_alpha: 0.99
       k_gains:
         - 240.0
@@ -88,7 +127,7 @@
 
   joint_state_broadcaster:
     ros__parameters:
-      arm_id: "fr3"
+      robot_type: "fr3"
       joints:
         - fr3_joint1
         - fr3_joint2

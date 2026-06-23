@@ -22,6 +22,7 @@ set(THIS_PACKAGE_INCLUDE_DEPENDS
   rclcpp_lifecycle
   realtime_tools
   rclcpp_action
+  franka_semantic_components
 )
 
 find_package(ament_cmake REQUIRED)
@@ -35,6 +36,8 @@ add_library(
         SHARED
         src/joint_follower_controller.cpp
         src/motion_generator.cpp
+        src/pid_joint_follower_controller.cpp
+        src/pid_controller.cpp
 )
 
 target_include_directories(

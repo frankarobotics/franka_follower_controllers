@@ -4,16 +4,12 @@ services:
     build:
       target: application
       args:
-        # If you change the ROS distribution, also update the versions tags of 
-        #   FRANKA_ROS2_VERSION, FRANKA_DESCRIPTION_VERSION and LIBFRANKA_VERSION 
-        #   to versions compatible with the chosen ROS distribution.
-        #   More information can be found here:
+        # Make sure that the selected franka_ros2 version is compatible with the selected ROS distribution.
+        # See the following links for more information:
         #     - https://frankarobotics.github.io/docs/franka_ros2/franka_ros2/doc/compatibility_matrix.html
         #     - https://frankarobotics.github.io/docs/compatibility.html
         - ROS_DISTRIBUTION=${ROS_DISTRIBUTION:-jazzy}
-        - FRANKA_ROS2_VERSION=${FRANKA_ROS2_VERSION:-v3.1.1}
-        - FRANKA_DESCRIPTION_VERSION=${FRANKA_DESCRIPTION_VERSION:-2.1.0}
-        - LIBFRANKA_VERSION=${LIBFRANKA_VERSION:-0.18.0}
+        - FRANKA_ROS2_VERSION=${FRANKA_ROS2_VERSION:-v3.4.0}
     volumes:
       - type: bind
         source: ${CONFIG_FILE:-./config/gello_joint_follower.yaml}

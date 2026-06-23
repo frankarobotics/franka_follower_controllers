@@ -31,7 +31,7 @@ namespace franka_follower_controllers
 /**
  * Controller to move the robot to a desired joint position.
  */
-class JointFollowerController
+class [[deprecated("Use PIDJointFollowerController instead.")]] JointFollowerController
   : public controller_interface::ControllerInterface {
 public:
   using Vector7d = Eigen::Matrix<double, 7, 1>;
@@ -50,7 +50,7 @@ public:
   on_deactivate(const rclcpp_lifecycle::State & previous_state) override;
 
 private:
-  std::string arm_id_;
+  std::string robot_type_;
   std::string namespace_prefix_;
   std::string robot_description_;
   std::string target_joint_states_topic_name_;

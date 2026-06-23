@@ -20,6 +20,14 @@
 #include <exception>
 #include <string>
 
+const std::string DEPRECATION_WARNING=R"(
+  #### DEPRECATION WARNING ####
+
+  The joint_follower_controller (franka_follower_controllers::JointFollowerController) is deprecated,
+  Please use the pid_joint_follower_controller (franka_follower_controllers::PIDJointFollowerController) instead!
+
+  #############################)";
+
 namespace franka_follower_controllers
 {
 
@@ -30,7 +38,7 @@ JointFollowerController::command_interface_configuration() const
   config.type = controller_interface::interface_configuration_type::INDIVIDUAL;
 
   for (int i = 1; i <= num_joints; ++i) {
-    config.names.push_back(namespace_prefix_ + arm_id_ + "_joint" + std::to_string(i) + "/effort");
+    config.names.push_back(namespace_prefix_ + robot_type_ + "_joint" + std::to_string(i) + "/effort");
   }
   return config;
 }
@@ -41,9 +49,9 @@ JointFollowerController::state_interface_configuration() const
   controller_interface::InterfaceConfiguration config;
   config.type = controller_interface::interface_configuration_type::INDIVIDUAL;
   for (int i = 1; i <= num_joints; ++i) {
-    config.names.push_back(namespace_prefix_ + arm_id_ + "_joint" + std::to_string(i) +
+    config.names.push_back(namespace_prefix_ + robot_type_ + "_joint" + std::to_string(i) +
                            "/position");
-    config.names.push_back(namespace_prefix_ + arm_id_ + "_joint" + std::to_string(i) +
+    config.names.push_back(namespace_prefix_ + robot_type_ + "_joint" + std::to_string(i) +
                            "/velocity");
   }
   return config;
@@ -127,8 +135,9 @@ void JointFollowerController::jointStateCallback_(const sensor_msgs::msg::JointS
 
 CallbackReturn JointFollowerController::on_init()
 {
+  RCLCPP_WARN(get_node()->get_logger(), DEPRECATION_WARNING.c_str());
   try {
-    auto_declare<std::string>("arm_id", "");
+    auto_declare<std::string>("robot_type", "");
     auto_declare<std::string>("target_joint_states_topic_name", "");
     auto_declare<bool>("sync_after_activation", false);
     auto_declare<double>("k_alpha", 0.99);
@@ -144,7 +153,7 @@ CallbackReturn JointFollowerController::on_init()
 CallbackReturn JointFollowerController::on_configure(
   const rclcpp_lifecycle::State & /*previous_state*/)
 {
-  arm_id_ = get_node()->get_parameter("arm_id").as_string();
+  robot_type_ = get_node()->get_parameter("robot_type").as_string();
   namespace_prefix_ = get_node()->get_namespace();
   if (namespace_prefix_ == "/" || namespace_prefix_.empty()) {
     namespace_prefix_.clear();
@@ -164,9 +173,9 @@ CallbackReturn JointFollowerController::on_configure(
 
 
   RCLCPP_INFO(get_node()->get_logger(),
-              "Controller parameters: arm_id: %s, target_joint_states_topic_name: %s, sync_after_activation: "
+              "Controller parameters: robot_type: %s, target_joint_states_topic_name: %s, sync_after_activation: "
               "%s, k_alpha: %f",
-              arm_id_.c_str(), target_joint_states_topic_name_.c_str(),
+              robot_type_.c_str(), target_joint_states_topic_name_.c_str(),
               sync_after_activation_ ? "true" : "false", k_alpha);
 
   if (!validateGains_(k_gains, "k_gains") || !validateGains_(d_gains, "d_gains")) {

@@ -5,4 +5,10 @@
             The JointFollowerController runs a Joint Impedance Controller that receives its target joint position from a configurable topic.
         </description>
     </class>
+    <class name="franka_follower_controllers/PIDJointFollowerController"
+           type="franka_follower_controllers::PIDJointFollowerController" base_class_type="controller_interface::ControllerInterface">
+        <description>
+            The PIDJointFollowerController runs a PID Controller that receives its target joint position from a configurable topic.
+        </description>
+    </class>
 </library>

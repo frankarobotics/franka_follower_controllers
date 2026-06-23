@@ -40,6 +40,10 @@ import yaml
 
 from launch import LaunchDescription, LaunchDescriptionEntity
 
+# Avoid the use of anchors and references in the generated parameter file
+# This is necessary because ROS 2 parameter parsing does not accept anchors and references
+yaml.Dumper.ignore_aliases = lambda *args : True
+
 LOWER_TORQUE_THRESHOLDS_ACCELERATION = [20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0]
 LOWER_TORQUE_THRESHOLD_NOMINAL = [10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0]
 LOWER_FORCE_THRESHOLDS_ACCELERATION = [20.0, 20.0, 20.0, 20.0, 20.0, 20.0]
@@ -61,13 +65,22 @@ MAX_FORCE_ACCELERATION_KEY = 'upper_force_thresholds_acceleration'
 MAX_FORCE_NOMINAL_KEY = 'upper_force_thresholds_nominal'
 LOAD_GRIPPER_KEY = 'load_gripper'
 MOCK_HARDWARE_KEY = 'mock_hardware'
-URDF_KEY = 'urdf_file'
 NAMESPACE_KEY = 'namespace'
 ROBOT_IP_KEY = 'robot_ip'
-ARM_ID_KEY = 'arm_id'
+ROBOT_TYPE_KEY = 'robot_type'
 RESET_POSITION_KEY = 'reset_position'
 SYNC_AFTER_ACTIVATION_KEY = 'sync_after_activation'
 ACTIVATE_CONTROLLER_KEY = 'activate_controller'
+PID_P_GAINS_KEY = 'pid_p_gains'
+PID_I_GAINS_KEY = 'pid_i_gains'
+PID_D_GAINS_KEY = 'pid_d_gains'
+VELOCITY_FILTER_ALPHA_KEY = 'velocity_filter_alpha'
+VELOCITY_LIMITS_SCALING_KEY = 'velocity_limits_scaling'
+ACCELERATION_LIMITS_KEY = 'acceleration_limits'
+TORQUE_DERIVATIVE_LIMITS_KEY = 'torque_derivative_limits'
+TORQUE_LIMITS_KEY = 'torque_limits'
+SYNC_COMPLETE_THRESHOLD_KEY = 'sync_complete_threshold'
+SYNC_VELOCITY_SCALING_KEY = 'sync_velocity_scaling'
 
 default_parameters = {
     K_ALPHA_KEY: 0.99,
@@ -80,11 +93,20 @@ default_parameters = {
     RESET_POSITION_KEY: [0.0, -0.25 * pi, 0.0, -0.75 * pi, 0.0, 0.5 * pi, 0.25 * pi],
     LOAD_GRIPPER_KEY: False,
     MOCK_HARDWARE_KEY: False,
-    URDF_KEY: 'fr3/fr3.urdf.xacro',
-    ARM_ID_KEY: '',
+    ROBOT_TYPE_KEY: 'fr3',
     ROBOT_IP_KEY: 'you_need_to_configure_the_robot_ip',
     SYNC_AFTER_ACTIVATION_KEY: True,
     ACTIVATE_CONTROLLER_KEY: False,
+    PID_P_GAINS_KEY: [240.0, 240.0, 240.0, 240.0, 100.0, 60.0, 20.0],
+    PID_I_GAINS_KEY: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    PID_D_GAINS_KEY: [20.0, 20.0, 20.0, 20.0, 10.0, 10.0, 5.0],
+    VELOCITY_FILTER_ALPHA_KEY: 0.9,
+    VELOCITY_LIMITS_SCALING_KEY: 0.9,
+    ACCELERATION_LIMITS_KEY: [9.5, 9.5, 9.5, 9.5, 9.5, 9.5, 9.5],
+    TORQUE_DERIVATIVE_LIMITS_KEY: [900.0, 900.0, 900.0, 900.0, 900.0, 900.0, 900.0],
+    TORQUE_LIMITS_KEY: [85.0, 85.0, 85.0, 85.0, 11.5, 11.5, 11.5],
+    SYNC_COMPLETE_THRESHOLD_KEY: 0.01,
+    SYNC_VELOCITY_SCALING_KEY: 0.2,
 }
 
 
@@ -135,14 +157,13 @@ def create_ros2_control_parameter_file(config) -> str:
     d_gains: list[float] = cvt_to_float_list(config[D_GAINS_KEY])
     reset_position: list[float] = cvt_to_float_list(config[RESET_POSITION_KEY])
 
-    arm_id = config.get(ARM_ID_KEY, 'fr3') or 'fr3'
-    arm_prefix = config.get(NAMESPACE_KEY, '') + '_' if config.get(NAMESPACE_KEY, '') else ''
+    robot_type = config.get(ROBOT_TYPE_KEY, 'fr3') or 'fr3'
 
     config_data = {
         '/**': {
             'joint_follower_controller': {
                 'ros__parameters': {
-                    'arm_id': arm_id,
+                    'robot_type': robot_type,
                     'target_joint_states_topic_name': config[TARGET_TOPIC_NAME_KEY],
                     'k_gains': k_gains,
                     'd_gains': d_gains,
@@ -150,9 +171,26 @@ def create_ros2_control_parameter_file(config) -> str:
                     'sync_after_activation': config[SYNC_AFTER_ACTIVATION_KEY],
                 }
             },
+            'pid_joint_follower_controller': {
+                'ros__parameters': {
+                    'robot_type': robot_type,
+                    'target_joint_states_topic_name': config[TARGET_TOPIC_NAME_KEY],
+                    'p_gains': cvt_to_float_list(config[PID_P_GAINS_KEY]),
+                    'i_gains': cvt_to_float_list(config[PID_I_GAINS_KEY]),
+                    'd_gains': cvt_to_float_list(config[PID_D_GAINS_KEY]),
+                    'velocity_filter_alpha': float(config[VELOCITY_FILTER_ALPHA_KEY]),
+                    'velocity_limits_scaling': float(config[VELOCITY_LIMITS_SCALING_KEY]),
+                    'acceleration_limits': cvt_to_float_list(config[ACCELERATION_LIMITS_KEY]),
+                    'torque_derivative_limits': cvt_to_float_list(config[TORQUE_DERIVATIVE_LIMITS_KEY]),
+                    'torque_limits': cvt_to_float_list(config[TORQUE_LIMITS_KEY]),
+                    'sync_complete_threshold': float(config[SYNC_COMPLETE_THRESHOLD_KEY]),
+                    'sync_velocity_scaling': float(config[SYNC_VELOCITY_SCALING_KEY]),
+                    'sync_after_activation': config[SYNC_AFTER_ACTIVATION_KEY],
+                }
+            },
             'gravity_compensation_controller': {
                 'ros__parameters': {
-                    'arm_id': arm_prefix + arm_id,
+                    'robot_type': robot_type,
                 }
             },
             'move_to_position_controller': {
@@ -222,15 +260,13 @@ def add_ros2_control_launch_config(
                 )
             ),
             launch_arguments={
-                'arm_id': ros2_control_config[ARM_ID_KEY],
-                'arm_prefix': namespace,  # Using namespace as arm_prefix
+                'robot_type': ros2_control_config[ROBOT_TYPE_KEY],
+                'arm_prefix': namespace,
                 'namespace': namespace,
-                'urdf_file': ros2_control_config[URDF_KEY],
                 'robot_ip': ros2_control_config[ROBOT_IP_KEY],
                 'load_gripper': str(ros2_control_config[LOAD_GRIPPER_KEY]),
                 'use_fake_hardware': str(ros2_control_config[MOCK_HARDWARE_KEY]),
-                'mock_sensor_commands': str(ros2_control_config[MOCK_HARDWARE_KEY]),
-                'joint_sources': ','.join(['joint_states', 'franka_gripper/joint_states']),
+                'fake_sensor_commands': str(ros2_control_config[MOCK_HARDWARE_KEY]),
                 'joint_state_rate': str(30),
                 'controllers_yaml': PathJoinSubstitution(
                     [
