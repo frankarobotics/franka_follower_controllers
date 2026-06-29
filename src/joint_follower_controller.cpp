@@ -15,6 +15,8 @@
 #include <franka_follower_controllers/joint_follower_controller.hpp>
 
 #include <Eigen/Eigen>
+#include <franka/model.h>   // franka::Frame (kEndEffector) for the Jacobian query
+#include <array>
 #include <cassert>
 #include <cmath>
 #include <exception>
@@ -45,6 +47,11 @@ JointFollowerController::state_interface_configuration() const
                            "/position");
     config.names.push_back(namespace_prefix_ + arm_id_ + "_joint" + std::to_string(i) +
                            "/velocity");
+  }
+  // Claim the robot-model interfaces (<prefix><arm_id>/robot_model + /robot_state)
+  // so we can read the Coriolis force vector for feedforward in update().
+  for (const auto & name : franka_robot_model_->get_state_interface_names()) {
+    config.names.push_back(name);
   }
   return config;
 }
@@ -132,8 +139,12 @@ CallbackReturn JointFollowerController::on_init()
     auto_declare<std::string>("target_joint_states_topic_name", "");
     auto_declare<bool>("sync_after_activation", false);
     auto_declare<double>("k_alpha", 0.99);
+    auto_declare<double>("torque_lpf_cutoff_hz", 100.0);
     auto_declare<std::vector<double>>("k_gains", {});
     auto_declare<std::vector<double>>("d_gains", {});
+    // DROID HybridJointImpedanceControl task-space gains (default_Kx / default_Kxd).
+    auto_declare<std::vector<double>>("cartesian_stiffness", {400.0, 400.0, 400.0, 15.0, 15.0, 15.0});
+    auto_declare<std::vector<double>>("cartesian_damping", {37.0, 37.0, 37.0, 2.0, 2.0, 2.0});
   } catch (const std::exception & e) {
     fprintf(stderr, "Exception thrown during init stage with message: %s \n", e.what());
     return CallbackReturn::ERROR;
@@ -152,6 +163,15 @@ CallbackReturn JointFollowerController::on_configure(
     // Remove leading slash and add trailing underscore
     namespace_prefix_ = namespace_prefix_.substr(1) + "_";
   }
+
+  // Robot model for Coriolis feedforward. Interface names must match what the
+  // hardware exports: <namespace_prefix><arm_id>/robot_model and /robot_state
+  // (e.g. "fr3_fr3/robot_model"). Constructed here so its interface names are
+  // available to state_interface_configuration() during the configure->inactive
+  // transition.
+  franka_robot_model_ = std::make_unique<franka_semantic_components::FrankaRobotModel>(
+    namespace_prefix_ + arm_id_ + "/robot_model",
+    namespace_prefix_ + arm_id_ + "/robot_state");
 
   sync_after_activation_ = get_node()->get_parameter("sync_after_activation").as_bool();
 
@@ -178,6 +198,20 @@ CallbackReturn JointFollowerController::on_configure(
     k_gains_(i) = k_gains.at(i);
   }
 
+  // Task-space (Cartesian) gains for the hybrid impedance (DROID HybridJointImpedanceControl).
+  auto cart_k = get_node()->get_parameter("cartesian_stiffness").as_double_array();
+  auto cart_d = get_node()->get_parameter("cartesian_damping").as_double_array();
+  if (cart_k.size() != 6 || cart_d.size() != 6) {
+    RCLCPP_FATAL(get_node()->get_logger(),
+                 "cartesian_stiffness/cartesian_damping must be size 6 (got %zu/%zu)",
+                 cart_k.size(), cart_d.size());
+    return CallbackReturn::FAILURE;
+  }
+  for (int i = 0; i < 6; ++i) {
+    cartesian_stiffness_(i) = cart_k.at(i);
+    cartesian_damping_(i) = cart_d.at(i);
+  }
+
   if (k_alpha < 0.0 || k_alpha > 1.0) {
     RCLCPP_FATAL(get_node()->get_logger(),
                  "k_alpha should be in the range [0, 1]");
@@ -185,8 +219,11 @@ CallbackReturn JointFollowerController::on_configure(
   }
 
   k_alpha_ = k_alpha;
+  torque_lpf_cutoff_hz_ = get_node()->get_parameter("torque_lpf_cutoff_hz").as_double();
+  RCLCPP_INFO(get_node()->get_logger(), "torque_lpf_cutoff_hz: %f", torque_lpf_cutoff_hz_);
 
   dq_filtered_.setZero();
+  tau_filtered_.setZero();
 
   auto parameters_client =
     std::make_shared<rclcpp::AsyncParametersClient>(get_node(), "robot_state_publisher");
@@ -200,8 +237,14 @@ CallbackReturn JointFollowerController::on_configure(
     RCLCPP_ERROR(get_node()->get_logger(), "Failed to get robot_description parameter.");
   }
 
+  // RT-correct QoS for the streaming target: BEST_EFFORT + KEEP_LAST(1) + VOLATILE
+  // (SensorDataQoS). A retransmitted/late joint target is worse than a dropped one;
+  // RELIABLE (the previous bare-int `1` default) adds retransmit / head-of-line
+  // jitter on the 1 kHz control input. Must match the franka-vr publisher (also
+  // BEST_EFFORT). The watchdog still catches a truly stale stream.
+  auto target_qos = rclcpp::QoS(rclcpp::KeepLast(1)).best_effort().durability_volatile();
   target_joint_state_subscriber_ = get_node()->create_subscription<sensor_msgs::msg::JointState>(
-          target_joint_states_topic_name_, 1,
+          target_joint_states_topic_name_, target_qos,
     [this](const sensor_msgs::msg::JointState & msg) {jointStateCallback_(msg);});
 
   auto qos = rclcpp::QoS(rclcpp::KeepLast(1)).transient_local();
@@ -220,8 +263,11 @@ CallbackReturn JointFollowerController::on_activate(
 {
   last_target_joint_state_time_ = get_node()->now();
   dq_filtered_.setZero();
+  tau_filtered_.setZero();
   move_to_start_position_finished_ = false;
   motion_generator_initialized_ = false;
+
+  franka_robot_model_->assign_loaned_state_interfaces(state_interfaces_);
 
   publishSyncState_(sync_after_activation_ ? "SYNCING" : "FOLLOWING");
 
@@ -231,6 +277,8 @@ CallbackReturn JointFollowerController::on_activate(
 CallbackReturn JointFollowerController::on_deactivate(
   const rclcpp_lifecycle::State & /*previous_state*/)
 {
+  franka_robot_model_->release_interfaces();
+
   publishSyncState_("INACTIVE");
 
   return CallbackReturn::SUCCESS;
@@ -239,9 +287,40 @@ CallbackReturn JointFollowerController::on_deactivate(
 auto JointFollowerController::calculateTauDGains_(const Vector7d & q_goal) -> Vector7d
 {
   dq_filtered_ = (1 - k_alpha_) * dq_filtered_ + k_alpha_ * dq_;
-  Vector7d tau_d_calculated;
-  tau_d_calculated = k_gains_.cwiseProduct(q_goal - q_) + d_gains_.cwiseProduct(-dq_filtered_);
 
+  // DROID HybridJointImpedanceControl: task-space (Cartesian) impedance mapped to
+  // joint space through the Jacobian, plus a joint null-space term:
+  //     Kp = Jᵀ Kx J + Kq ,   Kd = Jᵀ Kxd J + Kqd
+  //     tau = Kp (q_goal - q) - Kd dq_filtered + coriolis
+  // The Cartesian term (Kx/Kxd) dominates the stiffness/damping; k_gains_/d_gains_
+  // are the small joint null-space Kq/Kqd. J is the base-frame EE Jacobian (6x7,
+  // libfranka column-major -> Eigen column-major Map).
+  std::array<double, 42> jac_array =
+    franka_robot_model_->getZeroJacobian(franka::Frame::kEndEffector);
+  Eigen::Map<const Eigen::Matrix<double, 6, 7>> J(jac_array.data());
+
+  Eigen::Matrix<double, 7, 7> Kp = J.transpose() * cartesian_stiffness_.asDiagonal() * J;
+  Kp.diagonal() += k_gains_;
+  Eigen::Matrix<double, 7, 7> Kd = J.transpose() * cartesian_damping_.asDiagonal() * J;
+  Kd.diagonal() += d_gains_;
+
+  // Coriolis/centrifugal feedforward (libfranka adds gravity but not these).
+  std::array<double, 7> coriolis_array = franka_robot_model_->getCoriolisForceVector();
+  Vector7d coriolis(coriolis_array.data());
+
+  Vector7d tau_d_calculated = Kp * (q_goal - q_) - Kd * dq_filtered_ + coriolis;
+
+  // Commanded-torque low-pass (first-order, libfranka lowpassFilter form), replicating
+  // the 100 Hz torque LPF DROID/polymetis got from robot->control(..., cutoff). Removes
+  // the high-frequency torque content (15 Hz staircase steps + raw-dq damping noise)
+  // that franka_hardware would otherwise send to the joints unfiltered -> grinding.
+  // Disabled when cutoff >= controller rate (>=1000 Hz).
+  if (torque_lpf_cutoff_hz_ > 0.0 && torque_lpf_cutoff_hz_ < 1000.0) {
+    const double dt = 1e-3;  // 1 kHz controller period
+    const double gain = dt / (dt + 1.0 / (2.0 * M_PI * torque_lpf_cutoff_hz_));
+    tau_filtered_ = gain * tau_d_calculated + (1.0 - gain) * tau_filtered_;
+    return tau_filtered_;
+  }
   return tau_d_calculated;
 }
 

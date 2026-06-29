@@ -13,6 +13,7 @@ endif()
 set(THIS_PACKAGE_INCLUDE_DEPENDS
   controller_interface
   franka_msgs
+  franka_semantic_components
   sensor_msgs
   std_msgs
   controller_manager_msgs

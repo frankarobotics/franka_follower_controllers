@@ -17,6 +17,12 @@
     ros__parameters:
       update_rate: 1000
       thread_priority: 98
+      # Match franka_ros2 v3.4.0: tolerate the occasional loop overrun (keep writing a
+      # command through it) instead of dropping the cycle -- dropped cycles on a non-RT
+      # kernel were tripping libfranka's communication_constraints_violation reflex.
+      overruns:
+        manage: false
+        print_warnings: false
 
       joint_follower_controller:
         type: franka_follower_controllers/JointFollowerController
@@ -39,22 +45,29 @@
     ros__parameters:
       arm_id: "fr3"
       k_alpha: 0.99
-      k_gains:
-        - 240.0
-        - 240.0
-        - 240.0
-        - 240.0
-        - 100.0
-        - 60.0
-        - 20.0
-      d_gains:
-        - 20.0
-        - 20.0
-        - 20.0
+      torque_lpf_cutoff_hz: 100.0
+      # DROID HybridJointImpedanceControl gains (must match config_franka_robot.yml;
+      # this static file is loaded by the spawner AFTER the per-robot temp param file,
+      # so it wins -> keep it in sync). k_gains/d_gains are the joint null-space Kq/Kqd;
+      # cartesian_stiffness/damping (Kx/Kxd) are the dominant task-space impedance.
+      k_gains:        # DROID default_Kq
+        - 40.0
+        - 30.0
+        - 50.0
+        - 25.0
+        - 35.0
+        - 25.0
         - 10.0
-        - 10.0
-        - 10.0
+      d_gains:        # DROID default_Kqd
+        - 4.0
+        - 6.0
         - 5.0
+        - 5.0
+        - 3.0
+        - 2.0
+        - 1.0
+      cartesian_stiffness: [400.0, 400.0, 400.0, 15.0, 15.0, 15.0]   # DROID default_Kx
+      cartesian_damping:   [37.0, 37.0, 37.0, 2.0, 2.0, 2.0]          # DROID default_Kxd
 
   move_to_position_controller:
     ros__parameters:

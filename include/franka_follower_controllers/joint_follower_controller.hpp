@@ -17,6 +17,8 @@
 #include "franka_follower_controllers/motion_generator.hpp"
 #include <Eigen/Eigen>
 #include <controller_interface/controller_interface.hpp>
+#include <franka_semantic_components/franka_robot_model.hpp>
+#include <memory>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <std_msgs/msg/string.hpp>
@@ -35,6 +37,7 @@ class JointFollowerController
   : public controller_interface::ControllerInterface {
 public:
   using Vector7d = Eigen::Matrix<double, 7, 1>;
+  using Vector6d = Eigen::Matrix<double, 6, 1>;
   [[nodiscard]] controller_interface::InterfaceConfiguration
   command_interface_configuration() const override;
   [[nodiscard]] controller_interface::InterfaceConfiguration
@@ -58,14 +61,28 @@ private:
   Vector7d q_;
   Vector7d dq_;
   Vector7d dq_filtered_;
-  Vector7d k_gains_;
-  Vector7d d_gains_;
+  Vector7d tau_filtered_;   // LPF state for the commanded-torque low-pass (DROID-style)
+  Vector7d k_gains_;          // joint null-space stiffness Kq (DROID default_Kq)
+  Vector7d d_gains_;          // joint null-space damping  Kqd (DROID default_Kqd)
+  Vector6d cartesian_stiffness_;  // task-space Kx (DROID default_Kx), mapped via Jᵀ Kx J
+  Vector6d cartesian_damping_;    // task-space Kxd (DROID default_Kxd), mapped via Jᵀ Kxd J
   double k_alpha_;
+  // Commanded-torque low-pass cutoff [Hz]. DROID/polymetis ran libfranka's 100 Hz
+  // torque LPF (robot->control(..., cutoff)); franka_hardware's startTorqueControl()
+  // applies NO torque LPF (only a 1000 Nm/s rate clamp), so our raw PD+staircase
+  // torque reaches the joints with high-freq chatter -> grinding. We replicate the
+  // 100 Hz LPF here. Set >= controller rate (e.g. 1000) to disable.
+  double torque_lpf_cutoff_hz_{100.0};
   bool sync_after_activation_{false};
   bool move_to_start_position_finished_{false};
   bool motion_generator_initialized_{false};
   rclcpp::Time start_time_;
   std::unique_ptr<MotionGenerator> motion_generator_;
+  // Coriolis feedforward: libfranka auto-compensates GRAVITY in torque mode but NOT
+  // Coriolis/centrifugal terms. Without this, those torques are an uncompensated
+  // disturbance the PD must fight during motion (rough/sluggish tracking). DROID's
+  // HybridJointImpedanceControl added the same term, so this is dataset-faithful.
+  std::unique_ptr<franka_semantic_components::FrankaRobotModel> franka_robot_model_;
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr
     target_joint_state_subscriber_ = nullptr;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr state_publisher_;

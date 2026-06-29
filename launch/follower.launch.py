@@ -148,6 +148,14 @@ def create_ros2_control_parameter_file(config) -> str:
                     'd_gains': d_gains,
                     'k_alpha': config[K_ALPHA_KEY],
                     'sync_after_activation': config[SYNC_AFTER_ACTIVATION_KEY],
+                    # 100 Hz commanded-torque low-pass (DROID-style). Tunable for A/B;
+                    # >=1000 disables. Default 100 if not set in the robot config.
+                    'torque_lpf_cutoff_hz': float(config.get('torque_lpf_cutoff_hz', 100.0)),
+                    # DROID HybridJointImpedanceControl task-space gains (Kx / Kxd).
+                    'cartesian_stiffness': cvt_to_float_list(
+                        config.get('cartesian_stiffness', [400.0, 400.0, 400.0, 15.0, 15.0, 15.0])),
+                    'cartesian_damping': cvt_to_float_list(
+                        config.get('cartesian_damping', [37.0, 37.0, 37.0, 2.0, 2.0, 2.0])),
                 }
             },
             'gravity_compensation_controller': {
