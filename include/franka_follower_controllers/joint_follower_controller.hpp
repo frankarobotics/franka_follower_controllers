@@ -50,7 +50,7 @@ public:
   on_deactivate(const rclcpp_lifecycle::State & previous_state) override;
 
 private:
-  std::string arm_id_;
+  std::string robot_type_;
   std::string namespace_prefix_;
   std::string robot_description_;
   std::string target_joint_states_topic_name_;

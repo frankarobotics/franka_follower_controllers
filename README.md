@@ -63,3 +63,7 @@ urdf_file: "fr3/fr3.urdf.xacro"
 # Prefix for the joint names sent to tf2
 arm_prefix: ""
 ```
+
+## Dependencies
+
+This repo requires `franka_ros2` with version `v3.3.0+` for `ROS 2 Jazzy` or `v2.4.0+` for `ROS 2 Humble`.

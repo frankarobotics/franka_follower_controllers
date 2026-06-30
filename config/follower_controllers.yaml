@@ -37,7 +37,7 @@
 
   joint_follower_controller:
     ros__parameters:
-      arm_id: "fr3"
+      robot_type: "fr3"
       k_alpha: 0.99
       k_gains:
         - 240.0
@@ -88,7 +88,7 @@
 
   joint_state_broadcaster:
     ros__parameters:
-      arm_id: "fr3"
+      robot_type: "fr3"
       joints:
         - fr3_joint1
         - fr3_joint2
