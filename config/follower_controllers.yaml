@@ -17,6 +17,9 @@
     ros__parameters:
       update_rate: 1000
       thread_priority: 98
+      overruns:
+        manage: false
+        print_warnings: false
 
       joint_follower_controller:
         type: franka_follower_controllers/JointFollowerController
