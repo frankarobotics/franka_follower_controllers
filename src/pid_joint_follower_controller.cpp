@@ -675,12 +675,15 @@ CallbackReturn PIDJointFollowerController::on_activate(
 
   initial_sync_finished_ = !sync_after_activation_;
 
+  publishSyncState_(sync_after_activation_ ? "SYNCING" : "FOLLOWING");
+
   return CallbackReturn::SUCCESS;
 }
 
 controller_interface::CallbackReturn PIDJointFollowerController::on_deactivate(
     const rclcpp_lifecycle::State& /*previous_state*/) {
   franka_robot_model_->release_interfaces();
+  publishSyncState_("INACTIVE");
   return CallbackReturn::SUCCESS;
 }
 
