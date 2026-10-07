@@ -138,15 +138,14 @@ PIDJointFollowerController::state_interface_configuration() const {
   return config;
 }
 
-double PIDJointFollowerController::ComputeMaxDistanceToTarget(
-  const std::array<double, kNumJoints> & desired_position) const
+double PIDJointFollowerController::ComputeMaxDistanceToTarget(const Target & target) const
 {
-  if (!received_first_target_position_) {
+  if (!target.received) {
     return std::numeric_limits<double>::max();
   }
   double max_distance = 0.0;
   for (size_t i = 0; i < kNumJoints; ++i) {
-    max_distance = std::max(max_distance, std::abs(desired_position[i] - last_position_[i]));
+    max_distance = std::max(max_distance, std::abs(target.position[i] - last_position_[i]));
   }
   return max_distance;
 }
@@ -249,9 +248,10 @@ controller_interface::return_type PIDJointFollowerController::update(
 
   std::array<double, kNumJoints> controller_output;
   // Update desired position from subscriber.
-  const auto & desired_position = *desired_position_.readFromRT();
+  const Target & target = *desired_position_.readFromRT();
+  const auto & desired_position = target.position;
 
-  double distance_to_target = ComputeMaxDistanceToTarget(desired_position);
+  double distance_to_target = ComputeMaxDistanceToTarget(target);
 
   double velocity_limits_scaling = velocity_limits_scaling_;
   if (not initial_sync_finished_ && distance_to_target < sync_complete_threshold_) {
@@ -393,12 +393,12 @@ void PIDJointFollowerController::jointStateCallback_(
                 "Received joint state size is smaller than expected size.");
     return;
   }
-  std::array<double, kNumJoints> new_position;
+  Target new_target;
   std::copy(msg.position.begin(),
             msg.position.begin() + kNumJoints,
-            new_position.begin());
-  received_first_target_position_ = true;
-  desired_position_.writeFromNonRT(new_position);
+            new_target.position.begin());
+  new_target.received = true;
+  desired_position_.writeFromNonRT(new_target);
 
   last_joint_state_time_ = msg.header.stamp;
 }
@@ -666,7 +666,8 @@ CallbackReturn PIDJointFollowerController::on_activate(
     dq_filtered_[i] = 0.0;
     q_[i] = current_position[i];
   }
-  desired_position_.initRT(current_position);
+  // Hold the current pose and wait for a fresh target, so a reactivation syncs slowly again
+  desired_position_.initRT(Target{current_position, false});
 
   if (!controller_.Reset(q_)) {
     RCLCPP_ERROR(get_node()->get_logger(),

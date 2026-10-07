@@ -78,8 +78,13 @@ class PIDJointFollowerController
   std::array<double, kNumJoints> saturateTorqueRate(
       const std::array<double, kNumJoints>& tau_d_calculated,
       const std::array<double, kNumJoints>& tau_J_d);
-  double ComputeMaxDistanceToTarget(
-    const std::array<double, kNumJoints> & desired_position) const;
+  // Validity travels with the position so the RT read never pairs a stale pose with a fresh flag
+  struct Target {
+    std::array<double, kNumJoints> position;
+    bool received{false};
+  };
+
+  double ComputeMaxDistanceToTarget(const Target & target) const;
   std::pair<std::array<double, kNumJoints>, std::array<double, kNumJoints>>
   ComputeReferencePositionAndVelocity(const std::array<double, kNumJoints>& desired_position, double velocity_limits_scaling);
 
@@ -95,12 +100,11 @@ class PIDJointFollowerController
   double sync_complete_threshold_;
   double sync_velocity_scaling_;
   bool initial_sync_finished_{false};
-  bool received_first_target_position_{false};
   bool sync_after_activation_{false};
 
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr
       joint_state_subscriber_ = nullptr;
-  realtime_tools::RealtimeBuffer<std::array<double, kNumJoints>> desired_position_;
+  realtime_tools::RealtimeBuffer<Target> desired_position_;
   rclcpp::Time last_joint_state_time_;
   rclcpp::Time last_update_time_;
   // Direct pointer to franka::RobotState (from hardware interface)
